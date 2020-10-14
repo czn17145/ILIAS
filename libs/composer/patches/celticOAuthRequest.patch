@@ -1,0 +1,16 @@
+Index: var/www/php72/release_5-4_celtic/libs/composer/vendor/celtic/lti/src/OAuth/OAuthRequest.php
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- var/www/php72/release_5-4_celtic/libs/composer/vendor/celtic/lti/src/OAuth/OAuthRequest.php	(date 1602241638649)
++++ var/www/php72/release_5-4_celtic/libs/composer/vendor/celtic/lti/src/OAuth/OAuthRequest.php	(date 1602241638649)
+@@ -58,7 +58,7 @@
+                 }
+             }
+             $scheme = ($_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+-            $http_url = "{$scheme}://{$_SERVER['SERVER_NAME']}:{$_SERVER['SERVER_PORT']}{$_SERVER['REQUEST_URI']}";
++            $http_url = "{$scheme}://{$_SERVER['HTTP_HOST']}:{$_SERVER['SERVER_PORT']}{$_SERVER['REQUEST_URI']}";
+         }
+         $http_method = ($http_method) ? $http_method : $_SERVER['REQUEST_METHOD'];
+

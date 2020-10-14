@@ -2,20 +2,16 @@
 
 /* Copyright (c) 1998-2010 ILIAS open source, Extended GPL, see docs/LICENSE */
 
-use IMSGlobal\LTI\ToolProvider;
-use IMSGlobal\LTI\Profile\Item;
-use IMSGlobal\LTI\ToolProvider\DataConnector\DataConnector;
-use IMSGlobal\LTI\ToolProvider\MediaType;
-use IMSGlobal\LTI\Profile;
-use IMSGlobal\LTI\HTTPMessage;
-use IMSGlobal\LTI\OAuth;
+use ceLTIc\LTI\OAuth\OAuthRequest;
+use ceLTIc\LTI\OAuth\OAuthUtil;
+use ceLTIc\LTI\ToolProvider;
+use ceLTIc\LTI\DataConnector\DataConnector;
+use ceLTIc\LTI\OAuth;
+use ceLTIc\LTI\Context;
+use ceLTIc\LTI\ResourceLink;
+use ceLTIc\LTI\User;
 
-
-use IMSGlobal\LTI\ToolProvider\OAuthDataStore;
-use IMSGlobal\LTI\ToolProvider\Context;
-use IMSGlobal\LTI\ToolProvider\ResourceLink;
-use IMSGlobal\LTI\ToolProvider\User;
-
+require_once dirname(__FILE__) . '/class.ilLTIUser.php';
 /**
  * LTI provider for LTI launch
  *
@@ -23,7 +19,7 @@ use IMSGlobal\LTI\ToolProvider\User;
  * @author Uwe Kohnle <kohnle@internetlehrer-gmbh.de>
  *
  */
-class ilLTIToolProvider extends ToolProvider\ToolProvider
+class ilLTIToolProvider extends ToolProvider
 {
     /**
      * @var \ilLogger
@@ -114,8 +110,14 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                                                           'Result.url' => 'custom_result_url',
                                                           'ToolProxyBinding.memberships.url' => 'custom_context_memberships_url');
 
-
     /**
+     * LTI parameter constraints for auto validation checks.
+     *
+     * @var array|null $constraints
+     */
+    private $constraints = null;
+
+        /**
          * ilLTIToolProvider constructor.
          * @param DataConnector $dataConnector
          */
@@ -124,7 +126,10 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
         global $DIC;
 
         $this->logger = $DIC->logger()->lti();
+
         parent::__construct($dataConnector);
+
+        $this->constraints = [];
     }
 
 
@@ -197,9 +202,6 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
     {
         // only return error status
         return $this->ok;
-
-        //$this->doCallback('onError');
-        // return parent::onError(); //Stefan M.
     }
 
     ###
@@ -220,7 +222,7 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
             $callback = self::$METHOD_NAMES[$_POST['lti_message_type']];
         }
         if (method_exists($this, $callback)) {
-            $result = $this->$callback(); // ACHTUNG HIER PROBLEM UK
+            $result = $this->$callback();
         } elseif (is_null($method) && $this->ok) {
             $this->ok = false;
             $this->reason = "Message type not supported: {$_POST['lti_message_type']}";
@@ -273,7 +275,7 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                     } else {
                         header("Location: {$errorUrl}");
                     }
-                    exit; //ACHTUNG HIER PROBLEM UK
+                    exit;
                 } else {
                     if (!is_null($this->errorOutput)) {
                         echo $this->errorOutput;
@@ -302,7 +304,7 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
     private function authenticate()
     {
 
-// Get the consumer
+        // Get the consumer
         $doSaveConsumer = false;
         // Check all required launch parameters
         $this->ok = isset($_POST['lti_message_type']) && array_key_exists($_POST['lti_message_type'], self::$MESSAGE_TYPES);
@@ -375,9 +377,6 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
             }
         }
         $now = time();
-
-        $this->logger->debug('Checking consumer key...');
-
         // Check consumer key
         if ($this->ok && ($_POST['lti_message_type'] != 'ToolProxyRegistrationRequest')) {
             $this->ok = isset($_POST['oauth_consumer_key']);
@@ -385,7 +384,6 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                 $this->reason = 'Missing consumer key.';
             }
             if ($this->ok) {
-                // $this->consumer = new ToolConsumer($_POST['oauth_consumer_key'], $this->dataConnector);
                 $this->consumer = new ilLTIToolConsumer($_POST['oauth_consumer_key'], $this->dataConnector);
                 $this->ok = !is_null($this->consumer->created);
                 if (!$this->ok) {
@@ -402,11 +400,11 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                 }
                 $this->consumer->last_access = $now;
                 try {
-                    $store = new OAuthDataStore($this);
-                    $server = new OAuth\OAuthServer($store);
-                    $method = new OAuth\OAuthSignatureMethod_HMAC_SHA1();
+                    $store = new ceLTIc\LTI\OAuthDataStore($this);
+                    $server = new ceLTIc\LTI\OAuth\OAuthServer($store);
+                    $method = new ceLTIc\LTI\OAuth\OAuthSignatureMethod_HMAC_SHA1();
                     $server->add_signature_method($method);
-                    $request = OAuth\OAuthRequest::from_request();
+                    $request = self::from_request();
                     $res = $server->verify_request($request);
                 } catch (\Exception $e) {
                     $this->ok = false;
@@ -419,15 +417,17 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                                 $this->reason = 'OAuth exception';
                             }
                             $this->details[] = 'Timestamp: ' . time();
+                            $this->details[] = 'consumer->getKey(): ' . $this->consumer->getKey();
                             $this->details[] = "Signature: {$signature}";
                             $this->details[] = "Base string: {$request->base_string}]";
+                            $this->logger->dump($this->details);
                         } else {
                             $this->reason = 'OAuth signature check failed - perhaps an incorrect secret or timestamp.';
                         }
                     }
                 }
             }
-            // $this->ok = true; //ACHTUNG Problem Signature bei M.
+
             if ($this->ok) {
                 $today = date('Y-m-d', $now);
                 if (is_null($this->consumer->lastAccess)) {
@@ -503,7 +503,7 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                 $this->reason = 'Invalid lti_version parameter';
             }
             if ($this->ok) {
-                $http = new HTTPMessage($_POST['tc_profile_url'], 'GET', null, 'Accept: application/vnd.ims.lti.v2.toolconsumerprofile+json');
+                $http = new \ceLTIc\LTI\Http\HTTPMessage($_POST['tc_profile_url'], 'GET', null, 'Accept: application/vnd.ims.lti.v2.toolconsumerprofile+json');
                 $this->ok = $http->send();
                 if (!$this->ok) {
                     $this->reason = 'Tool consumer profile not accessible.';
@@ -517,7 +517,6 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
             }
             // Check for required capabilities
             if ($this->ok) {
-                // $this->consumer = new ToolConsumer($_POST['reg_key'], $this->dataConnector);
                 $this->consumer = new ilLTIToolConsumer($_POST['oauth_consumer_key'], $this->dataConnector);
                 $this->consumer->profile = $tcProfile;
                 $capabilities = $this->consumer->profile->capability_offered;
@@ -573,7 +572,7 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                 }
             }
         } elseif ($this->ok && !empty($_POST['custom_tc_profile_url']) && empty($this->consumer->profile)) {
-            $http = new HTTPMessage($_POST['custom_tc_profile_url'], 'GET', null, 'Accept: application/vnd.ims.lti.v2.toolconsumerprofile+json');
+            $http = new \ceLTIc\LTI\Http\HTTPMessage($_POST['custom_tc_profile_url'], 'GET', null, 'Accept: application/vnd.ims.lti.v2.toolconsumerprofile+json');
             if ($http->send()) {
                 $tcProfile = json_decode($http->response);
                 if (!is_null($tcProfile)) {
@@ -582,33 +581,6 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                 }
             }
         }
-        //ACHTUNG HIER TODO UWE
-        // Validate message parameter constraints
-        // if ($this->ok) {
-        // $invalidParameters = array();
-        // foreach ($this->constraints as $name => $constraint) {
-        // // if (empty($constraint['messages']) || in_array($_POST['lti_message_type'], $constraint['messages'])) {
-        // // $ok = true;
-        // // if ($constraint['required']) {
-        // // if (!isset($_POST[$name]) || (strlen(trim($_POST[$name])) <= 0)) {
-        // // $invalidParameters[] = "{$name} (missing)";
-        // // $ok = false;
-        // // }
-        // // }
-        // // if ($ok && !is_null($constraint['max_length']) && isset($_POST[$name])) {
-        // // if (strlen(trim($_POST[$name])) > $constraint['max_length']) {
-        // // $invalidParameters[] = "{$name} (too long)";
-        // // }
-        // // }
-        // // }
-        // }
-        // if (count($invalidParameters) > 0) {
-        // $this->ok = false;
-        // if (empty($this->reason)) {
-        // $this->reason = 'Invalid parameter(s): ' . implode(', ', $invalidParameters) . '.';
-        // }
-        // }
-        // }
 
         $this->logger->debug('Still ok: ' . ($this->ok ? '1' : '0'));
         if (!$this->ok) {
@@ -617,7 +589,7 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
 
         if ($this->ok) {
 
-// Set the request context
+            // Set the request context
             if (isset($_POST['context_id'])) {
                 $this->context = Context::fromConsumer($this->consumer, trim($_POST['context_id']));
                 $title = '';
@@ -706,7 +678,7 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                 $userId = trim($_POST['user_id']);
             }
 
-            $this->user = User::fromResourceLink($this->resourceLink, $userId);
+            $this->user = ilLTIUser::init()->fromResourceLink($this->resourceLink, $userId);
 
             // Set the user name
             $firstname = (isset($_POST['lis_person_name_given'])) ? $_POST['lis_person_name_given'] : '';
@@ -785,16 +757,12 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
             $this->consumer->save();
         }
         if ($this->ok && isset($this->context)) {
-            $this->context->save();//ACHTUNG TODO UWE
+            $this->context->save();
         }
-
-        $this->logger->dump(get_class($this->context));
-
 
         if ($this->ok && isset($this->resourceLink)) {
 
-// Check if a share arrangement is in place for this resource link
-            // $this->ok = $this->checkForShare();//ACHTUNG TODO UWE
+            // Check if a share arrangement is in place for this resource link
             // Persist changes to resource link
             $this->resourceLink->save();
 
@@ -809,7 +777,6 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
                 $this->user->save();
             }
         }
-        // die ($this->reason.'---'.$this->ok);//ACHTUNG WEG!
         return $this->ok;
     }
 
@@ -912,4 +879,77 @@ class ilLTIToolProvider extends ToolProvider\ToolProvider
 
         return $ok;
     }
+
+    public static function from_request($http_method = null, $http_url = null, $parameters = null)
+    {
+        if (!$http_url) {
+            if ((isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && ($_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ||
+                (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && ($_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')) ||
+                (isset($_SERVER['HTTP_X_URL_SCHEME']) && ($_SERVER['HTTP_X_URL_SCHEME'] === 'https'))) {
+                $_SERVER['HTTPS'] = 'on';
+                $_SERVER['SERVER_PORT'] = 443;
+            } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+                $_SERVER['HTTPS'] = 'off';
+                $_SERVER['SERVER_PORT'] = 80;
+            } elseif (!isset($_SERVER['HTTPS'])) {
+                $_SERVER['HTTPS'] = 'off';
+            }
+
+            if (isset($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+                $host = explode(':', $_SERVER['HTTP_X_FORWARDED_HOST'], 2);
+                $_SERVER['SERVER_NAME'] = $host[0];
+                if (count($host) > 1) {
+                    $_SERVER['SERVER_PORT'] = $host[1];
+                } elseif ($_SERVER['HTTPS'] === 'on') {
+                    $_SERVER['SERVER_PORT'] = 443;
+                } else {
+                    $_SERVER['SERVER_PORT'] = 80;
+                }
+            }
+            $scheme = ($_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+            $http_url = "{$scheme}://{$_SERVER['SERVER_NAME']}:{$_SERVER['SERVER_PORT']}{$_SERVER['REQUEST_URI']}";
+            # $http_url = "{$scheme}://{$_SERVER['HTTP_HOST']}:{$_SERVER['SERVER_PORT']}{$_SERVER['REQUEST_URI']}";
+        }
+        $http_method = ($http_method) ? $http_method : $_SERVER['REQUEST_METHOD'];
+
+        // We weren't handed any parameters, so let's find the ones relevant to
+        // this request.
+        // If you run XML-RPC or similar you should use this to provide your own
+        // parsed parameter-list
+        if (!$parameters) {
+            // Find request headers
+            $request_headers = OAuthUtil::get_headers();
+
+            // Parse the query-string to find GET parameters
+            if (isset($_SERVER['QUERY_STRING'])) {
+                $parameters = OAuthUtil::parse_parameters($_SERVER['QUERY_STRING']);
+            } else {
+                $parameters = array();
+            }
+
+            if (
+                (
+                    $http_method === 'POST' &&
+                    isset($request_headers['Content-Type']) &&
+                    stristr($request_headers['Content-Type'], 'application/x-www-form-urlencoded')
+                ) ||
+                !empty($_POST)) {
+                // It's a POST request of the proper content-type, so parse POST
+                // parameters and add those overriding any duplicates from GET
+                $post_data = OAuthUtil::parse_parameters(file_get_contents(OAuthRequest::$POST_INPUT));
+                $parameters = array_replace_recursive($parameters, $post_data);
+            }
+
+            // We have a Authorization-header with OAuth data. Parse the header
+            // and add those overriding any duplicates from GET or POST
+            if (isset($request_headers['Authorization']) && substr($request_headers['Authorization'], 0, 6) == 'OAuth ') {
+                $header_parameters = OAuthUtil::split_header($request_headers['Authorization']);
+                $parameters = array_merge_recursive($parameters, $header_parameters);
+            }
+        }
+
+        return new OAuthRequest($http_method, $http_url, $parameters);
+    }
+
+
 }

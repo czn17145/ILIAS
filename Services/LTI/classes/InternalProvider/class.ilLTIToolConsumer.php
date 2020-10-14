@@ -2,7 +2,7 @@
 
 /* Copyright (c) 1998-2010 ILIAS open source, Extended GPL, see docs/LICENSE */
 
-use IMSGlobal\LTI\ToolProvider\ToolConsumer;
+use ceLTIc\LTI\ToolConsumer;
 
 /**
  * LTI provider for LTI launch
@@ -83,7 +83,6 @@ class ilLTIToolConsumer extends ToolConsumer
     public function setTitle($title)
     {
         $this->title = $title;
-        // $this->consumerName = $title;
     }
 
     /**
@@ -148,7 +147,7 @@ class ilLTIToolConsumer extends ToolConsumer
      */
     public function createSecret()
     {
-        $this->setSecret(\IMSGlobal\LTI\ToolProvider\DataConnector\DataConnector::getRandomString(12));
+        $this->setSecret(\ceLTIc\LTI\DataConnector\DataConnector::getRandomString(12));
     }
 
     /**

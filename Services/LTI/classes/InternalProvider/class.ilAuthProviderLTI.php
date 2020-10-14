@@ -2,8 +2,6 @@
 
 /* Copyright (c) 1998-2010 ILIAS open source, Extended GPL, see docs/LICENSE */
 
-use IMSGlobal\LTI\ToolProvider;
-
 include_once './Services/Authentication/classes/Provider/class.ilAuthProvider.php';
 include_once './Services/Authentication/interfaces/interface.ilAuthProviderInterface.php';
 include_once './Services/LTI/classes/InternalProvider/class.ilLTIToolProvider.php';
@@ -42,9 +40,7 @@ class ilAuthProviderLTI extends \ilAuthProvider implements \ilAuthProviderInterf
         }
 
         $this->dataConnector = new ilLTIDataConnector();
-
         $lti_provider = new ilLTIToolProvider($this->dataConnector);
-        // $lti_provider = new ToolProvider\ToolProvider($this->dataConnector);
         $ok = $lti_provider->handleRequest();
 
         if (!$ok) {
@@ -55,7 +51,6 @@ class ilAuthProviderLTI extends \ilAuthProvider implements \ilAuthProviderInterf
         } else {
             $this->getLogger()->debug('LTI authentication success');
         }
-        // if ($lti_provider->reason != "") die($lti_provider->reason);//ACHTUNG später Rückgabe prüfen und nicht vergessen UWE
 
         // sm: this does only load the standard lti date connector, not the ilLTIToolConsumer with extended data, like prefix.
         $consumer = new ilLTIToolConsumer($_POST['oauth_consumer_key'], $this->dataConnector);
@@ -125,8 +120,6 @@ class ilAuthProviderLTI extends \ilAuthProvider implements \ilAuthProviderInterf
             $_SESSION['lti_lis_person_name_full'] = $lti_lis_person_name_full;
         }
 
-
-
         return true;
     }
 
@@ -142,22 +135,21 @@ class ilAuthProviderLTI extends \ilAuthProvider implements \ilAuthProviderInterf
         global $ilDB;
         
         $query = 'SELECT consumer_pk from lti2_consumer where consumer_key256 = ' . $ilDB->quote($a_oauth_consumer_key, 'text');
-        // $query = 'SELECT id from lti_ext_consumer where consumer_key = '.$ilDB->quote($a_oauth_consumer_key,'text');
         $this->getLogger()->debug($query);
         $res = $ilDB->query($query);
         
         $lti_id = 0;
         while ($row = $res->fetchRow(ilDBConstants::FETCHMODE_OBJECT)) {
             $lti_id = $row->consumer_pk;
-            // $lti_id = $row->id;
         }
         $this->getLogger()->debug('External consumer key is: ' . (int) $lti_id);
         return $lti_id;
     }
-    
+
     /**
      * find lti id
      * @param type $a_lti_id
+     * @return string
      */
     protected function findAuthPrefix($a_lti_id)
     {
@@ -194,11 +186,12 @@ class ilAuthProviderLTI extends \ilAuthProvider implements \ilAuthProviderInterf
         $this->getLogger()->debug('LTI role: ' . $role);
         return $role;
     }
-    
+
     /**
      * Find user by auth mode and lti id
      * @param type $a_oauth_user
      * @param type $a_oauth_id
+     * @return array|int|mixed
      */
     protected function findUserId($a_oauth_user, $a_oauth_id, $a_user_prefix)
     {
@@ -311,7 +304,6 @@ class ilAuthProviderLTI extends \ilAuthProvider implements \ilAuthProviderInterf
         }
         $obj_settings = new ilLTIProviderObjectSetting($target_ref_id, $consumer->getExtConsumerId());
         
-        // @todo read from lti data
         $roles = $_POST['roles'];
         if (!strlen($roles)) {
             $this->getLogger()->debug('No role information given');

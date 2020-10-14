@@ -1,0 +1,16 @@
+Index: var/www/php72/release_5-4_celtic/libs/composer/vendor/celtic/lti/src/ResourceLink.php
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- var/www/php72/release_5-4_celtic/libs/composer/vendor/celtic/lti/src/ResourceLink.php	(date 1602241351600)
++++ var/www/php72/release_5-4_celtic/libs/composer/vendor/celtic/lti/src/ResourceLink.php	(date 1602241351600)
+@@ -307,7 +307,7 @@
+     public function getConsumer()
+     {
+         if (is_null($this->consumer)) {
+-            if (!is_null($this->context) || !is_null($this->contextId)) {
++            if($this->context || $this->contextId) {
+                 $this->consumer = $this->getContext()->getConsumer();
+             } else {
+                 $this->consumer = ToolConsumer::fromRecordId($this->consumerId, $this->getDataConnector());
