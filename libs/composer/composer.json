@@ -320,6 +320,16 @@
 			"approved-by": "see security issue 20339",
 			"approved-date": "2017-04-05"
 		},
+		"celtic/lti"  : {
+			"source" : "https://github.com/celtic-project/LTI-PHP",
+			"used_version" : "v3.3",
+			"wrapped_by" : "Services/LTI",
+			"added_by" : "Uwe Kohnle <support@internetlehrer-gmbh.de>",
+			"last_update": "2016-11-24",
+			"last_update_by": "Stefan Meyer <smeyer.ilias@gmx.de>",
+			"approved-by": "Jour Fixe",
+			"approved-date": "YYYY-MM-DD"
+		},
 		"patches": {
 			"tecnickcom/tcpdf": {
 				"ILIAS TCPDF Patches": "patches/tcpdf.patch"
@@ -329,6 +339,11 @@
 			},
 			"simplesamlphp/simplesamlphp": {
 				"ILIAS SimpleSAMLphp Patches": "patches/simplesamlphp.patch"
+			},
+			"celtic/lti": {
+				"ILIAS LTI CurlClient Patches": "patches/celticCurlClient.patch",
+				"ILIAS LTI OAuthRequest Patches": "patches/celticOAuthRequest.patch",
+				"ILIAS LTI ResourceLink Patches": "patches/celticResourceLink.patch"
 			}
 		}
 	}
